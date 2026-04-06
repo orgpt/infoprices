@@ -3,13 +3,19 @@ const MAX_SUGGESTIONS = 12;
 
 const searchInput = document.getElementById("searchInput");
 const clearButton = document.getElementById("clearButton");
+const clearCartButton = document.getElementById("clearCartButton");
 const statusElement = document.getElementById("status");
 const suggestionsElement = document.getElementById("suggestions");
 const resultsElement = document.getElementById("results");
+const cartListElement = document.getElementById("cartList");
+const cartTotalElement = document.getElementById("cartTotal");
+const cartSummaryElement = document.getElementById("cartSummary");
 
 let items = [];
 let activeIndex = -1;
 let lastMatches = [];
+let selectedEntry = null;
+const cart = new Map();
 
 function normalizeArabic(text) {
     return String(text ?? "")
@@ -39,7 +45,7 @@ function escapeHtml(text) {
 function formatPrice(value) {
     const number = Number(value);
     if (Number.isNaN(number)) {
-        return value ?? "";
+        return String(value ?? "");
     }
 
     return `${number.toLocaleString("en-US", {
@@ -70,18 +76,15 @@ function buildIndex(rawItems) {
         const name = getField(item, ["الاسم"]) || fallbackValues[4] || "";
         const code = getField(item, ["كود"]) || fallbackValues[5] || "";
 
-        const searchable = normalizeArabic([name, code, price, packageValue, cartonCount, unit].join(" "));
-
         return {
             id: index,
-            item,
             name: String(name ?? ""),
             code: String(code ?? ""),
-            price,
+            price: Number(price) || 0,
             packageValue: String(packageValue ?? ""),
             cartonCount: String(cartonCount ?? ""),
             unit: String(unit ?? ""),
-            searchable
+            searchable: normalizeArabic([name, code, price, packageValue, cartonCount, unit].join(" "))
         };
     });
 }
@@ -95,7 +98,8 @@ function scoreMatch(entry, query) {
         return 0;
     }
 
-    if (normalizeArabic(entry.name).startsWith(query)) {
+    const normalizedName = normalizeArabic(entry.name);
+    if (normalizedName.startsWith(query)) {
         return 1;
     }
 
@@ -128,6 +132,10 @@ function highlightText(text, query) {
     return safeText.replace(new RegExp(`(${pattern})`, "ig"), "<mark>$1</mark>");
 }
 
+function getCartQuantity(entryId) {
+    return cart.get(entryId)?.quantity || 0;
+}
+
 function renderSuggestions(matches, query) {
     suggestionsElement.innerHTML = "";
     activeIndex = -1;
@@ -146,7 +154,6 @@ function renderSuggestions(matches, query) {
     statusElement.textContent = `تم العثور على ${matches.length} نتيجة سريعة.`;
 
     const fragment = document.createDocumentFragment();
-
     matches.forEach((entry, index) => {
         const li = document.createElement("li");
         li.className = "suggestion";
@@ -177,18 +184,25 @@ function renderEmptyState(message) {
 }
 
 function showResult(entry) {
+    selectedEntry = entry;
     suggestionsElement.innerHTML = "";
     statusElement.textContent = "تم عرض الصنف المختار.";
     searchInput.value = entry.name || entry.code;
+
+    const quantity = getCartQuantity(entry.id);
+    const lineTotal = entry.price * quantity;
+
     resultsElement.innerHTML = `
         <article class="result-card">
-            <h2>${escapeHtml(entry.name || "بدون اسم")}</h2>
-            <p class="price">${escapeHtml(formatPrice(entry.price))}</p>
-            <div class="details">
-                <div class="detail">
-                    <span class="detail-label">الكود</span>
-                    <strong>${escapeHtml(entry.code || "-")}</strong>
+            <div class="result-top">
+                <div>
+                    <h2>${escapeHtml(entry.name || "بدون اسم")}</h2>
+                    <div class="code-badge">الكود: ${escapeHtml(entry.code || "-")}</div>
                 </div>
+                <p class="price">${escapeHtml(formatPrice(entry.price))}</p>
+            </div>
+
+            <div class="details">
                 <div class="detail">
                     <span class="detail-label">العبوة</span>
                     <strong>${escapeHtml(entry.packageValue || "-")}</strong>
@@ -202,8 +216,104 @@ function showResult(entry) {
                     <strong>${escapeHtml(entry.unit || "-")}</strong>
                 </div>
             </div>
+
+            <div class="action-row">
+                <div class="qty-control">
+                    <button class="qty-button" type="button" data-action="add" aria-label="زيادة الكمية">+</button>
+                    <span class="qty-value">${quantity}</span>
+                    <button class="qty-button" type="button" data-action="subtract" aria-label="تقليل الكمية">-</button>
+                </div>
+                <div class="line-total">إجمالي الصنف: ${escapeHtml(formatPrice(lineTotal))}</div>
+            </div>
         </article>
     `;
+
+    resultsElement.querySelectorAll(".qty-button").forEach((button) => {
+        button.addEventListener("click", () => {
+            if (button.dataset.action === "add") {
+                updateCart(entry, 1);
+            } else {
+                updateCart(entry, -1);
+            }
+        });
+    });
+}
+
+function renderCart() {
+    const cartItems = Array.from(cart.values());
+
+    if (!cartItems.length) {
+        cartListElement.innerHTML = `<div class="cart-empty">أضف الأصناف من نتيجة البحث لتجهيز عرض السعر بسرعة.</div>`;
+        cartSummaryElement.textContent = "لا توجد أصناف مضافة بعد.";
+        cartTotalElement.textContent = formatPrice(0);
+        return;
+    }
+
+    const totalQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+    const totalPrice = cartItems.reduce((sum, item) => sum + item.quantity * item.price, 0);
+
+    cartSummaryElement.textContent = `${cartItems.length} صنف، بعدد ${totalQuantity} قطعة.`;
+    cartTotalElement.textContent = formatPrice(totalPrice);
+
+    cartListElement.innerHTML = cartItems.map((item) => `
+        <article class="cart-item">
+            <div class="cart-item-top">
+                <div>
+                    <h3 class="cart-item-name">${escapeHtml(item.name || "بدون اسم")}</h3>
+                    <div class="cart-item-code">الكود: ${escapeHtml(item.code || "-")}</div>
+                </div>
+                <div class="cart-item-total">${escapeHtml(formatPrice(item.quantity * item.price))}</div>
+            </div>
+            <div class="cart-item-bottom">
+                <div class="qty-control">
+                    <button class="qty-button" type="button" data-cart-action="add" data-entry-id="${item.id}">+</button>
+                    <span class="qty-value">${item.quantity}</span>
+                    <button class="qty-button" type="button" data-cart-action="subtract" data-entry-id="${item.id}">-</button>
+                </div>
+                <button class="mini-button" type="button" data-cart-action="remove" data-entry-id="${item.id}">حذف</button>
+            </div>
+        </article>
+    `).join("");
+
+    cartListElement.querySelectorAll("[data-cart-action]").forEach((button) => {
+        button.addEventListener("click", () => {
+            const entryId = Number(button.dataset.entryId);
+            const entry = items.find((item) => item.id === entryId);
+            if (!entry) {
+                return;
+            }
+
+            const action = button.dataset.cartAction;
+            if (action === "add") {
+                updateCart(entry, 1);
+            } else if (action === "subtract") {
+                updateCart(entry, -1);
+            } else if (action === "remove") {
+                cart.delete(entry.id);
+                renderCart();
+                if (selectedEntry?.id === entry.id) {
+                    showResult(selectedEntry);
+                }
+            }
+        });
+    });
+}
+
+function updateCart(entry, delta) {
+    const current = cart.get(entry.id) || { ...entry, quantity: 0 };
+    const nextQuantity = Math.max(0, current.quantity + delta);
+
+    if (nextQuantity === 0) {
+        cart.delete(entry.id);
+    } else {
+        cart.set(entry.id, { ...entry, quantity: nextQuantity });
+    }
+
+    renderCart();
+
+    if (selectedEntry?.id === entry.id) {
+        showResult(entry);
+    }
 }
 
 function updateActiveSuggestion(nextIndex) {
@@ -228,10 +338,12 @@ async function loadData() {
         const rawItems = await response.json();
         items = buildIndex(rawItems);
         statusElement.textContent = `تم تحميل ${items.length} صنف. ابدأ الكتابة للبحث.`;
-        renderEmptyState("اكتب اسم الصنف أو الكود لتظهر النتيجة هنا.");
+        renderEmptyState("اكتب اسم الصنف أو الكود ثم أضف الكمية إلى عرض الأسعار.");
+        renderCart();
     } catch (error) {
         statusElement.textContent = "تعذر تحميل ملف الأسعار.";
-        renderEmptyState("تأكد من فتح الصفحة عبر XAMPP أو خادم محلي حتى يعمل fetch بشكل صحيح.");
+        renderEmptyState("تأكد من تشغيل الصفحة من خلال XAMPP أو خادم محلي.");
+        cartListElement.innerHTML = `<div class="cart-empty">تعذر تهيئة السلة لأن البيانات لم تُحمّل.</div>`;
         console.error(error);
     }
 }
@@ -242,7 +354,8 @@ searchInput.addEventListener("input", () => {
     renderSuggestions(matches, query);
 
     if (!query.trim()) {
-        renderEmptyState("اكتب اسم الصنف أو الكود لتظهر النتيجة هنا.");
+        renderEmptyState("اكتب اسم الصنف أو الكود ثم أضف الكمية إلى عرض الأسعار.");
+        selectedEntry = null;
     }
 });
 
@@ -270,9 +383,18 @@ clearButton.addEventListener("click", () => {
     suggestionsElement.innerHTML = "";
     lastMatches = [];
     activeIndex = -1;
+    selectedEntry = null;
     statusElement.textContent = `تم تحميل ${items.length} صنف.`;
-    renderEmptyState("اكتب اسم الصنف أو الكود لتظهر النتيجة هنا.");
+    renderEmptyState("اكتب اسم الصنف أو الكود ثم أضف الكمية إلى عرض الأسعار.");
     searchInput.focus();
+});
+
+clearCartButton.addEventListener("click", () => {
+    cart.clear();
+    renderCart();
+    if (selectedEntry) {
+        showResult(selectedEntry);
+    }
 });
 
 document.addEventListener("click", (event) => {
