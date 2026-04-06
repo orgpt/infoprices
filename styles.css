@@ -310,6 +310,19 @@ body {
     background: rgba(255, 255, 255, 0.72);
 }
 
+.qty-input {
+    width: 88px;
+    min-height: 42px;
+    border: 1px solid rgba(88, 60, 27, 0.12);
+    border-radius: 12px;
+    background: #fff;
+    color: var(--text);
+    font-size: 1rem;
+    font-weight: 700;
+    text-align: center;
+    padding: 8px 10px;
+}
+
 .qty-button {
     width: 42px;
     height: 42px;
@@ -337,6 +350,18 @@ body {
     color: var(--muted);
     font-size: 0.95rem;
     font-weight: 700;
+}
+
+.add-button {
+    min-width: 150px;
+    background: var(--accent);
+    color: #fff;
+    border: 0;
+}
+
+.add-button:hover {
+    background: var(--accent-deep);
+    color: #fff;
 }
 
 .cart-list {
@@ -479,6 +504,11 @@ mark {
     .qty-control {
         width: 100%;
         justify-content: space-between;
+    }
+
+    .qty-input,
+    .add-button {
+        width: 100%;
     }
 
     .qty-button {
