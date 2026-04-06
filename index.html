@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>البحث في الأصناف</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <main class="app">
+        <section class="hero">
+            <p class="eyebrow">بحث سريع في الأصناف</p>
+            <h1>ابحث بالاسم أو الكود</h1>
+            <p class="subtitle">واجهة سريعة لإنشاء عرض أسعار من الموبايل أو الكمبيوتر بدون خطوات معقدة.</p>
+        </section>
+
+        <section class="search-panel">
+            <label class="search-label" for="searchInput">ابحث عن الصنف</label>
+            <div class="search-box">
+                <input
+                    id="searchInput"
+                    class="search-input"
+                    type="search"
+                    placeholder="مثال: استك نقدية أو 1475"
+                    autocomplete="off"
+                    spellcheck="false"
+                >
+                <button id="clearButton" class="clear-button" type="button" aria-label="مسح البحث">×</button>
+            </div>
+            <div id="status" class="status">جاري تحميل البيانات...</div>
+            <ul id="suggestions" class="suggestions" role="listbox" aria-label="اقتراحات البحث"></ul>
+        </section>
+
+        <section class="workspace">
+            <section class="results-panel">
+                <div class="section-head">
+                    <h2>نتيجة البحث</h2>
+                    <p>اختر الصنف ثم أضف الكمية مباشرة.</p>
+                </div>
+                <section id="results" class="results" aria-live="polite"></section>
+            </section>
+
+            <aside class="cart-panel">
+                <div class="cart-head">
+                    <div>
+                        <h2>عرض الأسعار</h2>
+                        <p id="cartSummary">لا توجد أصناف مضافة بعد.</p>
+                    </div>
+                    <button id="clearCartButton" class="secondary-button" type="button">تفريغ السلة</button>
+                </div>
+
+                <div id="cartList" class="cart-list"></div>
+
+                <div class="cart-footer">
+                    <div class="cart-total-block">
+                        <span class="cart-total-label">الإجمالي</span>
+                        <strong id="cartTotal" class="cart-total-value">0 جنيه</strong>
+                    </div>
+                </div>
+            </aside>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
