@@ -102,6 +102,12 @@ body {
     gap: 14px;
 }
 
+.cart-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .section-head h2,
 .cart-head h2 {
     margin: 0;
@@ -129,6 +135,17 @@ body {
 .secondary-button:hover {
     border-color: rgba(184, 92, 56, 0.25);
     color: var(--accent-deep);
+}
+
+.pdf-button {
+    background: var(--accent);
+    color: #fff;
+    border: 0;
+}
+
+.pdf-button:hover {
+    background: var(--accent-deep);
+    color: #fff;
 }
 
 .search-label {
@@ -492,6 +509,7 @@ mark {
 
     .section-head,
     .cart-head,
+    .cart-actions,
     .result-top,
     .action-row,
     .cart-item-top,

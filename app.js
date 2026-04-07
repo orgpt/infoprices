@@ -29,12 +29,17 @@ const T = {
 const searchInput = document.getElementById("searchInput");
 const clearButton = document.getElementById("clearButton");
 const clearCartButton = document.getElementById("clearCartButton");
+const downloadPdfButton = document.getElementById("downloadPdfButton");
 const statusElement = document.getElementById("status");
 const suggestionsElement = document.getElementById("suggestions");
 const resultsElement = document.getElementById("results");
 const cartListElement = document.getElementById("cartList");
 const cartTotalElement = document.getElementById("cartTotal");
 const cartSummaryElement = document.getElementById("cartSummary");
+
+const COMPANY_NAME = "الفجالة دوت كوم";
+const COMPANY_PHONE = "01558811537";
+const COMPANY_SITE = "https://elfagalla.com/";
 
 let items = [];
 let lastMatches = [];
@@ -329,6 +334,183 @@ function renderCart() {
     });
 }
 
+function buildPdfHtml(rows) {
+    const totalPrice = rows.reduce((sum, row) => sum + (row.quantity * row.price), 0);
+    const now = new Date();
+    const dateText = now.toLocaleDateString("ar-EG");
+
+    const rowMarkup = rows.map((row, index) => `
+        <tr>
+            <td>${index + 1}</td>
+            <td>${escapeHtml(row.name || "-")}</td>
+            <td>${escapeHtml(row.code || "-")}</td>
+            <td>${escapeHtml(row.quantity)}</td>
+            <td>${escapeHtml(formatPrice(row.price))}</td>
+            <td>${escapeHtml(formatPrice(row.quantity * row.price))}</td>
+        </tr>
+    `).join("");
+
+    return `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>عرض أسعار</title>
+    <style>
+        @page { margin: 90px 28px 80px; size: A4; }
+        body {
+            font-family: "Tahoma", "Arial", sans-serif;
+            color: #2b2117;
+            margin: 0;
+        }
+        header, footer {
+            position: fixed;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: #7a4b2b;
+        }
+        header {
+            top: -72px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #d8c7b3;
+        }
+        footer {
+            bottom: -60px;
+            padding-top: 12px;
+            border-top: 2px solid #d8c7b3;
+            font-size: 12px;
+        }
+        .company-name {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .company-meta {
+            font-size: 13px;
+        }
+        .title {
+            margin: 0 0 14px;
+            font-size: 28px;
+            color: #7a4b2b;
+        }
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 24px;
+            font-size: 14px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        thead th {
+            background: #f1e7db;
+            color: #6f3c1f;
+            padding: 10px 8px;
+            font-size: 14px;
+        }
+        tbody td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #e5d7c9;
+            font-size: 14px;
+            vertical-align: top;
+        }
+        .summary {
+            margin-top: 24px;
+            display: flex;
+            justify-content: flex-end;
+        }
+        .summary-box {
+            min-width: 240px;
+            padding: 16px 18px;
+            border: 1px solid #e5d7c9;
+            border-radius: 16px;
+            background: #fbf7f1;
+        }
+        .summary-line {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 18px;
+            font-weight: 700;
+            color: #7a4b2b;
+        }
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="company-name">${COMPANY_NAME}</div>
+        <div class="company-meta">${COMPANY_PHONE} | <a href="${COMPANY_SITE}">${COMPANY_SITE}</a></div>
+    </header>
+
+    <footer>
+        <div>${COMPANY_NAME} | ${COMPANY_PHONE} | ${COMPANY_SITE}</div>
+    </footer>
+
+    <main>
+        <h1 class="title">عرض أسعار</h1>
+        <div class="meta-row">
+            <div>التاريخ: ${dateText}</div>
+            <div>عدد الأصناف: ${rows.length}</div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>الصنف</th>
+                    <th>الكود</th>
+                    <th>الكمية</th>
+                    <th>سعر الوحدة</th>
+                    <th>الإجمالي</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rowMarkup}
+            </tbody>
+        </table>
+
+        <div class="summary">
+            <div class="summary-box">
+                <div class="summary-line">
+                    <span>${T.total}</span>
+                    <span>${formatPrice(totalPrice)}</span>
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
+    `;
+}
+
+function downloadPdf() {
+    const rows = Array.from(cart.values());
+    if (!rows.length) {
+        statusElement.textContent = T.noItemsYet;
+        return;
+    }
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+        statusElement.textContent = "اسمح بفتح نافذة جديدة لتحميل PDF.";
+        return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(buildPdfHtml(rows));
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+}
+
 function updateActiveSuggestion(nextIndex) {
     const nodes = suggestionsElement.querySelectorAll(".suggestion");
     if (!nodes.length) return;
@@ -395,6 +577,8 @@ clearCartButton.addEventListener("click", () => {
     renderCart();
     if (selectedEntry) showResult(selectedEntry);
 });
+
+downloadPdfButton.addEventListener("click", downloadPdf);
 
 document.addEventListener("click", (event) => {
     if (!event.target.closest(".search-panel")) suggestionsElement.innerHTML = "";
