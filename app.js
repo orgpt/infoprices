@@ -455,7 +455,7 @@ function buildPdfHtml(rows) {
     </footer>
 
     <main>
-        <h1 class="title">عرض أسعار</h1>
+        <h1 class="title">عرض أسعار الفجالة دوت كوم</h1>
         <div class="meta-row">
             <div>التاريخ: ${dateText}</div>
             <div>عدد الأصناف: ${rows.length}</div>
