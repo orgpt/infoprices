@@ -23,6 +23,7 @@ const T = {
     total: "\u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a",
     subtotal: "\u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a \u0642\u0628\u0644 \u0627\u0644\u062e\u0635\u0645",
     discountValue: "\u0642\u064a\u0645\u0629 \u0627\u0644\u062e\u0635\u0645",
+    discountPercent: "\u062e\u0635\u0645 %",
     fetchError: "\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0645\u0644\u0641 \u0627\u0644\u0623\u0633\u0639\u0627\u0631.",
     runServer: "\u062a\u0623\u0643\u062f \u0645\u0646 \u062a\u0634\u063a\u064a\u0644 \u0627\u0644\u0635\u0641\u062d\u0629 \u0645\u0646 \u062e\u0644\u0627\u0644 XAMPP \u0623\u0648 \u062e\u0627\u062f\u0645 \u0645\u062d\u0644\u064a.",
     popupBlocked: "\u0627\u0633\u0645\u062d \u0628\u0641\u062a\u062d \u0646\u0627\u0641\u0630\u0629 \u062c\u062f\u064a\u062f\u0629 \u0644\u062a\u062d\u0645\u064a\u0644 PDF."
@@ -40,7 +41,6 @@ const statusElement = document.getElementById("status");
 const suggestionsElement = document.getElementById("suggestions");
 const resultsElement = document.getElementById("results");
 const cartListElement = document.getElementById("cartList");
-const discountInput = document.getElementById("discountInput");
 const cartSubtotalElement = document.getElementById("cartSubtotal");
 const cartDiscountValueElement = document.getElementById("cartDiscountValue");
 const cartTotalElement = document.getElementById("cartTotal");
@@ -50,7 +50,6 @@ let items = [];
 let lastMatches = [];
 let activeIndex = -1;
 let selectedEntry = null;
-let discountPercent = 0;
 const cart = new Map();
 
 function normalizeArabic(text) {
@@ -152,15 +151,22 @@ function getCartQuantity(id) {
     return cart.get(id)?.quantity || 0;
 }
 
-function getDiscountPercent() {
-    return Math.min(100, Math.max(0, Number(discountInput.value) || 0));
+function getRowTotals(row) {
+    const subtotal = row.quantity * row.price;
+    const discountPercent = Math.min(100, Math.max(0, Number(row.discountPercent) || 0));
+    const discountValue = subtotal * (discountPercent / 100);
+    const total = subtotal - discountValue;
+    return { subtotal, discountPercent, discountValue, total };
 }
 
 function getCartTotals(rows = Array.from(cart.values())) {
-    const subtotal = rows.reduce((sum, row) => sum + (row.quantity * row.price), 0);
-    const discountValue = subtotal * (discountPercent / 100);
-    const total = subtotal - discountValue;
-    return { subtotal, discountValue, total };
+    return rows.reduce((acc, row) => {
+        const totals = getRowTotals(row);
+        acc.subtotal += totals.subtotal;
+        acc.discountValue += totals.discountValue;
+        acc.total += totals.total;
+        return acc;
+    }, { subtotal: 0, discountValue: 0, total: 0 });
 }
 
 function renderEmptyState(message) {
@@ -273,8 +279,10 @@ function showResult(entry) {
 
     addToCartButton.addEventListener("click", () => {
         const qty = Math.max(1, Number(qtyInput.value) || 1);
-        const current = cart.get(entry.id)?.quantity || 0;
-        cart.set(entry.id, { ...entry, quantity: current + qty });
+        const existing = cart.get(entry.id);
+        const discountPercent = existing?.discountPercent || 0;
+        const currentQty = existing?.quantity || 0;
+        cart.set(entry.id, { ...entry, quantity: currentQty + qty, discountPercent });
         renderCart();
         showResult(entry);
     });
@@ -294,20 +302,21 @@ function renderCart() {
     }
 
     const totalQty = rows.reduce((sum, row) => sum + row.quantity, 0);
-
     cartSummaryElement.textContent = `${rows.length} ${T.item}، ${totalQty} ${T.pieces}.`;
     cartSubtotalElement.textContent = formatPrice(totals.subtotal);
     cartDiscountValueElement.textContent = formatPrice(totals.discountValue);
     cartTotalElement.textContent = formatPrice(totals.total);
 
-    cartListElement.innerHTML = rows.map((row) => `
+    cartListElement.innerHTML = rows.map((row) => {
+        const rowTotals = getRowTotals(row);
+        return `
         <article class="cart-item">
             <div class="cart-item-top">
                 <div>
                     <h3 class="cart-item-name">${escapeHtml(row.name || "-")}</h3>
                     <div class="cart-item-code">${T.code}: ${escapeHtml(row.code || "-")}</div>
                 </div>
-                <div class="cart-item-total">${escapeHtml(formatPrice(row.quantity * row.price))}</div>
+                <div class="cart-item-total">${escapeHtml(formatPrice(rowTotals.total))}</div>
             </div>
             <div class="cart-item-bottom">
                 <div class="qty-control">
@@ -315,10 +324,19 @@ function renderCart() {
                     <input class="qty-input cart-qty-input" type="number" min="1" step="1" value="${row.quantity}" data-id="${row.id}">
                     <button class="qty-button" type="button" data-cart-action="minus" data-id="${row.id}">-</button>
                 </div>
+                <div class="item-discount-box">
+                    <label class="item-discount-label" for="discount-${row.id}">${T.discountPercent}</label>
+                    <input id="discount-${row.id}" class="discount-input item-discount-input" type="number" min="0" max="100" step="0.01" value="${row.discountPercent || 0}" data-id="${row.id}">
+                </div>
                 <button class="mini-button" type="button" data-cart-action="remove" data-id="${row.id}">${T.remove}</button>
             </div>
+            <div class="cart-item-meta">
+                <span>${T.subtotal}: ${escapeHtml(formatPrice(rowTotals.subtotal))}</span>
+                <span>${T.discountValue}: ${escapeHtml(formatPrice(rowTotals.discountValue))}</span>
+            </div>
         </article>
-    `).join("");
+        `;
+    }).join("");
 
     cartListElement.querySelectorAll("[data-cart-action]").forEach((button) => {
         button.addEventListener("click", () => {
@@ -354,6 +372,18 @@ function renderCart() {
             if (selectedEntry?.id === id) showResult(selectedEntry);
         });
     });
+
+    cartListElement.querySelectorAll(".item-discount-input").forEach((input) => {
+        input.addEventListener("input", () => {
+            const id = Number(input.dataset.id);
+            const item = cart.get(id);
+            if (!item) return;
+            item.discountPercent = Math.min(100, Math.max(0, Number(input.value) || 0));
+            input.value = item.discountPercent;
+            cart.set(id, item);
+            renderCart();
+        });
+    });
 }
 
 function buildPdfHtml(rows) {
@@ -361,16 +391,20 @@ function buildPdfHtml(rows) {
     const now = new Date();
     const dateText = now.toLocaleDateString("ar-EG");
 
-    const rowMarkup = rows.map((row, index) => `
+    const rowMarkup = rows.map((row, index) => {
+        const rowTotals = getRowTotals(row);
+        return `
         <tr>
             <td>${index + 1}</td>
             <td>${escapeHtml(row.name || "-")}</td>
             <td>${escapeHtml(row.code || "-")}</td>
             <td>${escapeHtml(row.quantity)}</td>
             <td>${escapeHtml(formatPrice(row.price))}</td>
-            <td>${escapeHtml(formatPrice(row.quantity * row.price))}</td>
+            <td>${escapeHtml(row.discountPercent || 0)}%</td>
+            <td>${escapeHtml(formatPrice(rowTotals.total))}</td>
         </tr>
-    `).join("");
+        `;
+    }).join("");
 
     return `
 <!DOCTYPE html>
@@ -420,6 +454,7 @@ function buildPdfHtml(rows) {
                     <th>الكود</th>
                     <th>الكمية</th>
                     <th>سعر الوحدة</th>
+                    <th>الخصم</th>
                     <th>الإجمالي</th>
                 </tr>
             </thead>
@@ -432,7 +467,7 @@ function buildPdfHtml(rows) {
                     <span>${formatPrice(totals.subtotal)}</span>
                 </div>
                 <div class="summary-line">
-                    <span>${T.discountValue} (${discountPercent}%)</span>
+                    <span>${T.discountValue}</span>
                     <span>${formatPrice(totals.discountValue)}</span>
                 </div>
                 <div class="summary-line">
@@ -536,15 +571,8 @@ clearCartButton.addEventListener("click", () => {
 
 downloadPdfButton.addEventListener("click", downloadPdf);
 
-discountInput.addEventListener("input", () => {
-    discountPercent = getDiscountPercent();
-    discountInput.value = discountPercent;
-    renderCart();
-});
-
 document.addEventListener("click", (event) => {
     if (!event.target.closest(".search-panel")) suggestionsElement.innerHTML = "";
 });
 
-discountPercent = getDiscountPercent();
 loadData();

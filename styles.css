@@ -435,6 +435,29 @@ body {
     margin-top: 14px;
 }
 
+.item-discount-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.item-discount-label {
+    color: var(--muted);
+    font-size: 0.92rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.cart-item-meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px 14px;
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 0.92rem;
+}
+
 .mini-button {
     min-height: 40px;
     padding: 8px 12px;
@@ -456,22 +479,8 @@ body {
     border-top: 1px solid rgba(88, 60, 27, 0.1);
 }
 
-.discount-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 14px;
-}
-
-.discount-label {
-    color: var(--muted);
-    font-size: 0.95rem;
-    font-weight: 700;
-}
-
 .discount-input {
-    width: 130px;
+    width: 100px;
     min-height: 42px;
     border: 1px solid rgba(88, 60, 27, 0.12);
     border-radius: 12px;
@@ -549,7 +558,7 @@ mark {
     .cart-item-top,
     .cart-item-bottom,
     .cart-total-block,
-    .discount-row {
+    .item-discount-box {
         flex-direction: column;
         align-items: stretch;
     }
