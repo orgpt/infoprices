@@ -326,7 +326,7 @@ function renderCart() {
                 </div>
                 <div class="item-discount-box">
                     <label class="item-discount-label" for="discount-${row.id}">${T.discountPercent}</label>
-                    <input id="discount-${row.id}" class="discount-input item-discount-input" type="number" min="0" max="100" step="0.01" value="${row.discountPercent || 0}" data-id="${row.id}">
+                    <input id="discount-${row.id}" class="discount-input item-discount-input" type="number" min="0" max="100" step="1" value="${row.discountPercent || 0}" data-id="${row.id}">
                 </div>
                 <button class="mini-button" type="button" data-cart-action="remove" data-id="${row.id}">${T.remove}</button>
             </div>
@@ -374,14 +374,23 @@ function renderCart() {
     });
 
     cartListElement.querySelectorAll(".item-discount-input").forEach((input) => {
-        input.addEventListener("input", () => {
+        const applyDiscount = () => {
             const id = Number(input.dataset.id);
             const item = cart.get(id);
             if (!item) return;
+
             item.discountPercent = Math.min(100, Math.max(0, Number(input.value) || 0));
-            input.value = item.discountPercent;
             cart.set(id, item);
             renderCart();
+        };
+
+        input.addEventListener("change", applyDiscount);
+        input.addEventListener("blur", applyDiscount);
+        input.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                input.blur();
+            }
         });
     });
 }
