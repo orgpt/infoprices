@@ -456,6 +456,33 @@ body {
     border-top: 1px solid rgba(88, 60, 27, 0.1);
 }
 
+.discount-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.discount-label {
+    color: var(--muted);
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.discount-input {
+    width: 130px;
+    min-height: 42px;
+    border: 1px solid rgba(88, 60, 27, 0.12);
+    border-radius: 12px;
+    background: #fff;
+    color: var(--text);
+    font-size: 1rem;
+    font-weight: 700;
+    text-align: center;
+    padding: 8px 10px;
+}
+
 .cart-total-block {
     display: flex;
     align-items: center;
@@ -463,11 +490,18 @@ body {
     gap: 12px;
 }
 
+.cart-subtotal-block,
+.cart-discount-block {
+    margin-bottom: 12px;
+}
+
 .cart-total-label {
     color: var(--muted);
     font-size: 0.95rem;
 }
 
+.cart-subtotal-value,
+.cart-discount-value,
 .cart-total-value {
     color: var(--accent-deep);
     font-size: 1.4rem;
@@ -514,7 +548,8 @@ mark {
     .action-row,
     .cart-item-top,
     .cart-item-bottom,
-    .cart-total-block {
+    .cart-total-block,
+    .discount-row {
         flex-direction: column;
         align-items: stretch;
     }
@@ -525,7 +560,8 @@ mark {
     }
 
     .qty-input,
-    .add-button {
+    .add-button,
+    .discount-input {
         width: 100%;
     }
 

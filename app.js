@@ -14,7 +14,6 @@ const T = {
     pack: "\u0627\u0644\u0639\u0628\u0648\u0629",
     cartonCount: "\u0639\u062f\u062f \u0627\u0644\u0639\u0628\u0648\u0627\u062a \u0628\u0627\u0644\u0643\u0631\u062a\u0648\u0646\u0629",
     unit: "\u0627\u0644\u0648\u062d\u062f\u0629",
-    quantity: "\u0627\u0644\u0643\u0645\u064a\u0629",
     addToCart: "\u0625\u0636\u0627\u0641\u0629 \u0644\u0644\u0633\u0644\u0629",
     lineTotal: "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0635\u0646\u0641",
     emptyCart: "\u0623\u0636\u0641 \u0627\u0644\u0623\u0635\u0646\u0627\u0641 \u0645\u0646 \u0646\u062a\u064a\u062c\u0629 \u0627\u0644\u0628\u062d\u062b \u0644\u062a\u062c\u0647\u064a\u0632 \u0639\u0631\u0636 \u0627\u0644\u0633\u0639\u0631 \u0628\u0633\u0631\u0639\u0629.",
@@ -22,9 +21,16 @@ const T = {
     pieces: "\u0642\u0637\u0639\u0629",
     remove: "\u062d\u0630\u0641",
     total: "\u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a",
+    subtotal: "\u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a \u0642\u0628\u0644 \u0627\u0644\u062e\u0635\u0645",
+    discountValue: "\u0642\u064a\u0645\u0629 \u0627\u0644\u062e\u0635\u0645",
     fetchError: "\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0645\u0644\u0641 \u0627\u0644\u0623\u0633\u0639\u0627\u0631.",
-    runServer: "\u062a\u0623\u0643\u062f \u0645\u0646 \u062a\u0634\u063a\u064a\u0644 \u0627\u0644\u0635\u0641\u062d\u0629 \u0645\u0646 \u062e\u0644\u0627\u0644 XAMPP \u0623\u0648 \u062e\u0627\u062f\u0645 \u0645\u062d\u0644\u064a."
+    runServer: "\u062a\u0623\u0643\u062f \u0645\u0646 \u062a\u0634\u063a\u064a\u0644 \u0627\u0644\u0635\u0641\u062d\u0629 \u0645\u0646 \u062e\u0644\u0627\u0644 XAMPP \u0623\u0648 \u062e\u0627\u062f\u0645 \u0645\u062d\u0644\u064a.",
+    popupBlocked: "\u0627\u0633\u0645\u062d \u0628\u0641\u062a\u062d \u0646\u0627\u0641\u0630\u0629 \u062c\u062f\u064a\u062f\u0629 \u0644\u062a\u062d\u0645\u064a\u0644 PDF."
 };
+
+const COMPANY_NAME = "\u0627\u0644\u0641\u062c\u0627\u0644\u0629 \u062f\u0648\u062a \u0643\u0648\u0645";
+const COMPANY_PHONE = "01558811537";
+const COMPANY_SITE = "https://elfagalla.com/";
 
 const searchInput = document.getElementById("searchInput");
 const clearButton = document.getElementById("clearButton");
@@ -34,17 +40,17 @@ const statusElement = document.getElementById("status");
 const suggestionsElement = document.getElementById("suggestions");
 const resultsElement = document.getElementById("results");
 const cartListElement = document.getElementById("cartList");
+const discountInput = document.getElementById("discountInput");
+const cartSubtotalElement = document.getElementById("cartSubtotal");
+const cartDiscountValueElement = document.getElementById("cartDiscountValue");
 const cartTotalElement = document.getElementById("cartTotal");
 const cartSummaryElement = document.getElementById("cartSummary");
-
-const COMPANY_NAME = "الفجالة دوت كوم";
-const COMPANY_PHONE = "01558811537";
-const COMPANY_SITE = "https://elfagalla.com/";
 
 let items = [];
 let lastMatches = [];
 let activeIndex = -1;
 let selectedEntry = null;
+let discountPercent = 0;
 const cart = new Map();
 
 function normalizeArabic(text) {
@@ -144,6 +150,17 @@ function highlightText(text, query) {
 
 function getCartQuantity(id) {
     return cart.get(id)?.quantity || 0;
+}
+
+function getDiscountPercent() {
+    return Math.min(100, Math.max(0, Number(discountInput.value) || 0));
+}
+
+function getCartTotals(rows = Array.from(cart.values())) {
+    const subtotal = rows.reduce((sum, row) => sum + (row.quantity * row.price), 0);
+    const discountValue = subtotal * (discountPercent / 100);
+    const total = subtotal - discountValue;
+    return { subtotal, discountValue, total };
 }
 
 function renderEmptyState(message) {
@@ -265,18 +282,23 @@ function showResult(entry) {
 
 function renderCart() {
     const rows = Array.from(cart.values());
+    const totals = getCartTotals(rows);
+
     if (!rows.length) {
         cartListElement.innerHTML = `<div class="cart-empty">${T.emptyCart}</div>`;
         cartSummaryElement.textContent = T.noItemsYet;
+        cartSubtotalElement.textContent = formatPrice(0);
+        cartDiscountValueElement.textContent = formatPrice(0);
         cartTotalElement.textContent = formatPrice(0);
         return;
     }
 
     const totalQty = rows.reduce((sum, row) => sum + row.quantity, 0);
-    const totalPrice = rows.reduce((sum, row) => sum + (row.quantity * row.price), 0);
 
     cartSummaryElement.textContent = `${rows.length} ${T.item}، ${totalQty} ${T.pieces}.`;
-    cartTotalElement.textContent = formatPrice(totalPrice);
+    cartSubtotalElement.textContent = formatPrice(totals.subtotal);
+    cartDiscountValueElement.textContent = formatPrice(totals.discountValue);
+    cartTotalElement.textContent = formatPrice(totals.total);
 
     cartListElement.innerHTML = rows.map((row) => `
         <article class="cart-item">
@@ -335,7 +357,7 @@ function renderCart() {
 }
 
 function buildPdfHtml(rows) {
-    const totalPrice = rows.reduce((sum, row) => sum + (row.quantity * row.price), 0);
+    const totals = getCartTotals(rows);
     const now = new Date();
     const dateText = now.toLocaleDateString("ar-EG");
 
@@ -358,90 +380,22 @@ function buildPdfHtml(rows) {
     <title>عرض أسعار</title>
     <style>
         @page { margin: 90px 28px 80px; size: A4; }
-        body {
-            font-family: "Tahoma", "Arial", sans-serif;
-            color: #2b2117;
-            margin: 0;
-        }
-        header, footer {
-            position: fixed;
-            left: 0;
-            right: 0;
-            text-align: center;
-            color: #7a4b2b;
-        }
-        header {
-            top: -72px;
-            padding-bottom: 12px;
-            border-bottom: 2px solid #d8c7b3;
-        }
-        footer {
-            bottom: -60px;
-            padding-top: 12px;
-            border-top: 2px solid #d8c7b3;
-            font-size: 12px;
-        }
-        .company-name {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 6px;
-        }
-        .company-meta {
-            font-size: 13px;
-        }
-        .title {
-            margin: 0 0 14px;
-            font-size: 28px;
-            color: #7a4b2b;
-        }
-        .meta-row {
-            display: flex;
-            justify-content: space-between;
-            gap: 16px;
-            margin-bottom: 24px;
-            font-size: 14px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-        }
-        thead th {
-            background: #f1e7db;
-            color: #6f3c1f;
-            padding: 10px 8px;
-            font-size: 14px;
-        }
-        tbody td {
-            padding: 10px 8px;
-            border-bottom: 1px solid #e5d7c9;
-            font-size: 14px;
-            vertical-align: top;
-        }
-        .summary {
-            margin-top: 24px;
-            display: flex;
-            justify-content: flex-end;
-        }
-        .summary-box {
-            min-width: 240px;
-            padding: 16px 18px;
-            border: 1px solid #e5d7c9;
-            border-radius: 16px;
-            background: #fbf7f1;
-        }
-        .summary-line {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            font-size: 18px;
-            font-weight: 700;
-            color: #7a4b2b;
-        }
-        a {
-            color: inherit;
-            text-decoration: none;
-        }
+        body { font-family: "Tahoma", "Arial", sans-serif; color: #2b2117; margin: 0; }
+        header, footer { position: fixed; left: 0; right: 0; text-align: center; color: #7a4b2b; }
+        header { top: -72px; padding-bottom: 12px; border-bottom: 2px solid #d8c7b3; }
+        footer { bottom: -60px; padding-top: 12px; border-top: 2px solid #d8c7b3; font-size: 12px; }
+        .company-name { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+        .company-meta { font-size: 13px; }
+        .title { margin: 0 0 14px; font-size: 28px; color: #7a4b2b; }
+        .meta-row { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 24px; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        thead th { background: #f1e7db; color: #6f3c1f; padding: 10px 8px; font-size: 14px; }
+        tbody td { padding: 10px 8px; border-bottom: 1px solid #e5d7c9; font-size: 14px; vertical-align: top; }
+        .summary { margin-top: 24px; display: flex; justify-content: flex-end; }
+        .summary-box { min-width: 260px; padding: 16px 18px; border: 1px solid #e5d7c9; border-radius: 16px; background: #fbf7f1; }
+        .summary-line { display: flex; justify-content: space-between; gap: 12px; font-size: 18px; font-weight: 700; color: #7a4b2b; margin-bottom: 8px; }
+        .summary-line:last-child { margin-bottom: 0; }
+        a { color: inherit; text-decoration: none; }
     </style>
 </head>
 <body>
@@ -449,18 +403,15 @@ function buildPdfHtml(rows) {
         <div class="company-name">${COMPANY_NAME}</div>
         <div class="company-meta">${COMPANY_PHONE} | <a href="${COMPANY_SITE}">${COMPANY_SITE}</a></div>
     </header>
-
     <footer>
         <div>${COMPANY_NAME} | ${COMPANY_PHONE} | ${COMPANY_SITE}</div>
     </footer>
-
     <main>
-        <h1 class="title">عرض أسعار الفجالة دوت كوم</h1>
+        <h1 class="title">عرض أسعار</h1>
         <div class="meta-row">
             <div>التاريخ: ${dateText}</div>
             <div>عدد الأصناف: ${rows.length}</div>
         </div>
-
         <table>
             <thead>
                 <tr>
@@ -472,16 +423,21 @@ function buildPdfHtml(rows) {
                     <th>الإجمالي</th>
                 </tr>
             </thead>
-            <tbody>
-                ${rowMarkup}
-            </tbody>
+            <tbody>${rowMarkup}</tbody>
         </table>
-
         <div class="summary">
             <div class="summary-box">
                 <div class="summary-line">
+                    <span>${T.subtotal}</span>
+                    <span>${formatPrice(totals.subtotal)}</span>
+                </div>
+                <div class="summary-line">
+                    <span>${T.discountValue} (${discountPercent}%)</span>
+                    <span>${formatPrice(totals.discountValue)}</span>
+                </div>
+                <div class="summary-line">
                     <span>${T.total}</span>
-                    <span>${formatPrice(totalPrice)}</span>
+                    <span>${formatPrice(totals.total)}</span>
                 </div>
             </div>
         </div>
@@ -500,7 +456,7 @@ function downloadPdf() {
 
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
-        statusElement.textContent = "اسمح بفتح نافذة جديدة لتحميل PDF.";
+        statusElement.textContent = T.popupBlocked;
         return;
     }
 
@@ -580,8 +536,15 @@ clearCartButton.addEventListener("click", () => {
 
 downloadPdfButton.addEventListener("click", downloadPdf);
 
+discountInput.addEventListener("input", () => {
+    discountPercent = getDiscountPercent();
+    discountInput.value = discountPercent;
+    renderCart();
+});
+
 document.addEventListener("click", (event) => {
     if (!event.target.closest(".search-panel")) suggestionsElement.innerHTML = "";
 });
 
+discountPercent = getDiscountPercent();
 loadData();
