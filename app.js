@@ -32,6 +32,7 @@ const T = {
 const COMPANY_NAME = "\u0627\u0644\u0641\u062c\u0627\u0644\u0629 \u062f\u0648\u062a \u0643\u0648\u0645";
 const COMPANY_PHONE = "01558811537";
 const COMPANY_SITE = "https://elfagalla.com/";
+const STORAGE_KEY = "infoprice-cart-v1";
 
 const searchInput = document.getElementById("searchInput");
 const clearButton = document.getElementById("clearButton");
@@ -169,6 +170,42 @@ function getCartTotals(rows = Array.from(cart.values())) {
     }, { subtotal: 0, discountValue: 0, total: 0 });
 }
 
+function saveCartState() {
+    try {
+        const payload = Array.from(cart.values()).map((row) => ({
+            id: row.id,
+            quantity: row.quantity,
+            discountPercent: row.discountPercent || 0
+        }));
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+        console.error("Failed to save cart state", error);
+    }
+}
+
+function restoreCartState() {
+    try {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+
+        const savedRows = JSON.parse(raw);
+        if (!Array.isArray(savedRows)) return;
+
+        savedRows.forEach((savedRow) => {
+            const entry = items.find((item) => item.id === Number(savedRow.id));
+            if (!entry) return;
+
+            cart.set(entry.id, {
+                ...entry,
+                quantity: Math.max(1, Number(savedRow.quantity) || 1),
+                discountPercent: Math.min(100, Math.max(0, Number(savedRow.discountPercent) || 0))
+            });
+        });
+    } catch (error) {
+        console.error("Failed to restore cart state", error);
+    }
+}
+
 function renderEmptyState(message) {
     resultsElement.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
 }
@@ -283,6 +320,7 @@ function showResult(entry) {
         const discountPercent = existing?.discountPercent || 0;
         const currentQty = existing?.quantity || 0;
         cart.set(entry.id, { ...entry, quantity: currentQty + qty, discountPercent });
+        saveCartState();
         renderCart();
         showResult(entry);
     });
@@ -298,6 +336,7 @@ function renderCart() {
         cartSubtotalElement.textContent = formatPrice(0);
         cartDiscountValueElement.textContent = formatPrice(0);
         cartTotalElement.textContent = formatPrice(0);
+        saveCartState();
         return;
     }
 
@@ -350,12 +389,14 @@ function renderCart() {
                 item.quantity = Math.max(1, item.quantity - 1);
             } else if (button.dataset.cartAction === "remove") {
                 cart.delete(id);
+                saveCartState();
                 renderCart();
                 if (selectedEntry?.id === id) showResult(selectedEntry);
                 return;
             }
 
             cart.set(id, item);
+            saveCartState();
             renderCart();
             if (selectedEntry?.id === id) showResult(selectedEntry);
         });
@@ -368,6 +409,7 @@ function renderCart() {
             if (!item) return;
             item.quantity = Math.max(1, Number(input.value) || 1);
             cart.set(id, item);
+            saveCartState();
             renderCart();
             if (selectedEntry?.id === id) showResult(selectedEntry);
         });
@@ -381,6 +423,7 @@ function renderCart() {
 
             item.discountPercent = Math.min(100, Math.max(0, Number(input.value) || 0));
             cart.set(id, item);
+            saveCartState();
             renderCart();
         };
 
@@ -524,6 +567,7 @@ async function loadData() {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const rawItems = await response.json();
         items = buildIndex(rawItems);
+        restoreCartState();
         statusElement.textContent = `${T.loaded} ${items.length} ${T.item}.`;
         renderEmptyState(T.startSearch);
         renderCart();
@@ -574,6 +618,7 @@ clearButton.addEventListener("click", () => {
 
 clearCartButton.addEventListener("click", () => {
     cart.clear();
+    saveCartState();
     renderCart();
     if (selectedEntry) showResult(selectedEntry);
 });
