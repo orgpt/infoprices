@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title>&#1575;&#1604;&#1576;&#1581;&#1579; &#1601;&#1610; &#1575;&#1604;&#1571;&#1589;&#1606;&#1575;&#1601;</title>
-    <link rel="stylesheet" href="styles.css?v=6">
+    <link rel="stylesheet" href="styles.css?v=7">
 </head>
 <body>
     <main class="app">
@@ -35,6 +35,8 @@
                         <p id="cartSummary">&#1604;&#1575; &#1578;&#1608;&#1580;&#1583; &#1571;&#1589;&#1606;&#1575;&#1601; &#1605;&#1590;&#1575;&#1601;&#1577; &#1576;&#1593;&#1583;.</p>
                     </div>
                     <div class="cart-actions">
+                        <input id="priceSheetInput" type="file" accept=".pdf" hidden>
+                        <button id="uploadPriceSheetButton" class="secondary-button" type="button">&#1585;&#1601;&#1593; &#1593;&#1585;&#1590; &#1571;&#1587;&#1593;&#1575;&#1585;</button>
                         <button id="downloadPdfButton" class="secondary-button pdf-button" type="button">&#1578;&#1581;&#1605;&#1610;&#1604; PDF</button>
                         <button id="clearCartButton" class="secondary-button" type="button">&#1578;&#1601;&#1585;&#1610;&#1594; &#1575;&#1604;&#1587;&#1604;&#1577;</button>
                     </div>
@@ -58,6 +60,7 @@
         </section>
     </main>
 
-    <script src="app.js?v=7"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js" defer></script>
+    <script src="app.js?v=8"></script>
 </body>
 </html>

@@ -24,6 +24,7 @@ const T = {
     subtotal: "\u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a \u0642\u0628\u0644 \u0627\u0644\u062e\u0635\u0645",
     discountValue: "\u0642\u064a\u0645\u0629 \u0627\u0644\u062e\u0635\u0645",
     discountPercent: "\u062e\u0635\u0645 %",
+    quantity: "\u0627\u0644\u0643\u0645\u064a\u0629",
     fetchError: "\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0645\u0644\u0641 \u0627\u0644\u0623\u0633\u0639\u0627\u0631.",
     runServer: "\u062a\u0623\u0643\u062f \u0645\u0646 \u062a\u0634\u063a\u064a\u0644 \u0627\u0644\u0635\u0641\u062d\u0629 \u0645\u0646 \u062e\u0644\u0627\u0644 XAMPP \u0623\u0648 \u062e\u0627\u062f\u0645 \u0645\u062d\u0644\u064a.",
     popupBlocked: "\u0627\u0633\u0645\u062d \u0628\u0641\u062a\u062d \u0646\u0627\u0641\u0630\u0629 \u062c\u062f\u064a\u062f\u0629 \u0644\u062a\u062d\u0645\u064a\u0644 PDF."
@@ -33,11 +34,15 @@ const COMPANY_NAME = "\u0627\u0644\u0641\u062c\u0627\u0644\u0629 \u062f\u0648\u0
 const COMPANY_PHONE = "01558811537";
 const COMPANY_SITE = "https://elfagalla.com/";
 const STORAGE_KEY = "infoprice-cart-v1";
+const UI_STORAGE_KEY = "infoprice-ui-v1";
+const PDF_WORKER_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js";
 
 const searchInput = document.getElementById("searchInput");
 const clearButton = document.getElementById("clearButton");
 const clearCartButton = document.getElementById("clearCartButton");
 const downloadPdfButton = document.getElementById("downloadPdfButton");
+const uploadPriceSheetButton = document.getElementById("uploadPriceSheetButton");
+const priceSheetInput = document.getElementById("priceSheetInput");
 const statusElement = document.getElementById("status");
 const suggestionsElement = document.getElementById("suggestions");
 const resultsElement = document.getElementById("results");
@@ -52,6 +57,7 @@ let lastMatches = [];
 let activeIndex = -1;
 let selectedEntry = null;
 const cart = new Map();
+let restoredUiState = null;
 
 function normalizeArabic(text) {
     return String(text ?? "")
@@ -84,6 +90,15 @@ function formatPrice(value) {
         minimumFractionDigits: number % 1 === 0 ? 0 : 2,
         maximumFractionDigits: 2
     })} \u062c\u0646\u064a\u0647`;
+}
+
+function normalizeDigits(value) {
+    return String(value ?? "").replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (digit) => {
+        const code = digit.charCodeAt(0);
+        if (code >= 0x0660 && code <= 0x0669) return String(code - 0x0660);
+        if (code >= 0x06F0 && code <= 0x06F9) return String(code - 0x06F0);
+        return digit;
+    });
 }
 
 function getField(item, candidates) {
@@ -174,6 +189,7 @@ function saveCartState() {
     try {
         const payload = Array.from(cart.values()).map((row) => ({
             id: row.id,
+            code: row.code,
             quantity: row.quantity,
             discountPercent: row.discountPercent || 0
         }));
@@ -192,7 +208,10 @@ function restoreCartState() {
         if (!Array.isArray(savedRows)) return;
 
         savedRows.forEach((savedRow) => {
-            const entry = items.find((item) => item.id === Number(savedRow.id));
+            const entry = items.find((item) => (
+                item.id === Number(savedRow.id) ||
+                (savedRow.code && normalizeDigits(item.code) === normalizeDigits(savedRow.code))
+            ));
             if (!entry) return;
 
             cart.set(entry.id, {
@@ -203,6 +222,181 @@ function restoreCartState() {
         });
     } catch (error) {
         console.error("Failed to restore cart state", error);
+    }
+}
+
+function saveUiState() {
+    try {
+        const payload = {
+            search: searchInput.value || "",
+            selectedCode: selectedEntry?.code || ""
+        };
+        window.localStorage.setItem(UI_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+        console.error("Failed to save UI state", error);
+    }
+}
+
+function restoreUiState() {
+    try {
+        const raw = window.localStorage.getItem(UI_STORAGE_KEY);
+        if (!raw) return;
+
+        const savedUi = JSON.parse(raw);
+        if (!savedUi || typeof savedUi !== "object") return;
+        restoredUiState = savedUi;
+    } catch (error) {
+        console.error("Failed to restore UI state", error);
+    }
+}
+
+function applyRestoredUiState() {
+    if (!restoredUiState) return;
+
+    const { search = "", selectedCode = "" } = restoredUiState;
+    if (search) {
+        searchInput.value = search;
+        renderSuggestions(findMatches(search), search);
+    }
+
+    if (selectedCode) {
+        const entry = items.find((item) => normalizeDigits(item.code) === normalizeDigits(selectedCode));
+        if (entry) {
+            showResult(entry);
+            return;
+        }
+    }
+
+    if (!search) renderEmptyState(T.startSearch);
+}
+
+function upsertCartEntry(entry, quantityToAdd = 1) {
+    const safeQty = Math.max(1, Number(quantityToAdd) || 1);
+    const existing = cart.get(entry.id);
+    const discountPercent = existing?.discountPercent || 0;
+    const currentQty = existing?.quantity || 0;
+    cart.set(entry.id, { ...entry, quantity: currentQty + safeQty, discountPercent });
+}
+
+function getItemByCode(code) {
+    const normalizedCode = normalizeDigits(String(code ?? "").trim());
+    if (!normalizedCode) return null;
+    return items.find((item) => normalizeDigits(item.code) === normalizedCode) || null;
+}
+
+function buildPdfTextLines(page) {
+    return page.getTextContent().then((content) => {
+        const rows = [];
+        const sortedItems = [...content.items].sort((a, b) => {
+            const yDiff = Math.abs((b.transform?.[5] ?? 0) - (a.transform?.[5] ?? 0));
+            if (yDiff > 2) return (b.transform?.[5] ?? 0) - (a.transform?.[5] ?? 0);
+            return (a.transform?.[4] ?? 0) - (b.transform?.[4] ?? 0);
+        });
+
+        sortedItems.forEach((item) => {
+            const text = normalizeDigits((item.str || "").trim());
+            if (!text) return;
+
+            const y = Math.round(item.transform?.[5] ?? 0);
+            const lastRow = rows[rows.length - 1];
+            if (!lastRow || Math.abs(lastRow.y - y) > 3) {
+                rows.push({ y, parts: [text] });
+                return;
+            }
+
+            lastRow.parts.push(text);
+        });
+
+        return rows.map((row) => row.parts.join(" ").replace(/\s+/g, " ").trim()).filter(Boolean);
+    });
+}
+
+function parseImportedLine(line) {
+    const numericTokens = line.match(/\d+(?:[.,]\d+)?/g) || [];
+    const code = numericTokens.find((token) => /^\d{3,}$/.test(token));
+    if (!code) return null;
+
+    const quantityToken = numericTokens.find((token) => {
+        if (token === code) return false;
+        if (!/^\d+$/.test(token)) return false;
+        const value = Number(token);
+        return value > 0 && value < 100000;
+    });
+
+    return {
+        code,
+        quantity: Math.max(1, Number(quantityToken) || 1)
+    };
+}
+
+async function extractItemsFromPdf(file) {
+    if (!window.pdfjsLib) {
+        throw new Error("PDF library unavailable");
+    }
+
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_WORKER_URL;
+    const buffer = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+    const importedRows = [];
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        const page = await pdf.getPage(pageNumber);
+        const lines = await buildPdfTextLines(page);
+        lines.forEach((line) => {
+            const parsed = parseImportedLine(line);
+            if (parsed) importedRows.push(parsed);
+        });
+    }
+
+    return importedRows;
+}
+
+async function importPriceSheet(file) {
+    if (!file) return;
+
+    statusElement.textContent = "جاري قراءة عرض الأسعار المرفوع...";
+
+    try {
+        const importedRows = await extractItemsFromPdf(file);
+        if (!importedRows.length) {
+            statusElement.textContent = "لم يتم العثور على أكواد أصناف واضحة داخل الملف.";
+            return;
+        }
+
+        const mergedByCode = new Map();
+        importedRows.forEach((row) => {
+            const key = normalizeDigits(row.code);
+            const current = mergedByCode.get(key) || { code: row.code, quantity: 0 };
+            current.quantity += Math.max(1, Number(row.quantity) || 1);
+            mergedByCode.set(key, current);
+        });
+
+        let matched = 0;
+        const missingCodes = [];
+        mergedByCode.forEach((row) => {
+            const entry = getItemByCode(row.code);
+            if (!entry) {
+                missingCodes.push(row.code);
+                return;
+            }
+
+            upsertCartEntry(entry, row.quantity);
+            matched += 1;
+        });
+
+        saveCartState();
+        renderCart();
+
+        if (selectedEntry) showResult(selectedEntry);
+
+        statusElement.textContent = missingCodes.length
+            ? `تمت إضافة ${matched} صنف من الملف، وتعذر مطابقة ${missingCodes.length} كود.`
+            : `تمت إضافة ${matched} صنف من عرض الأسعار إلى السلة.`;
+    } catch (error) {
+        console.error("Failed to import price sheet", error);
+        statusElement.textContent = "تعذر قراءة ملف الـ PDF. تأكد من أن الملف نصي وليس صورة فقط.";
+    } finally {
+        priceSheetInput.value = "";
     }
 }
 
@@ -251,6 +445,7 @@ function renderSuggestions(matches, query) {
 
 function showResult(entry) {
     selectedEntry = entry;
+    saveUiState();
     searchInput.value = entry.name || entry.code;
     suggestionsElement.innerHTML = "";
     statusElement.textContent = T.selected;
@@ -316,10 +511,7 @@ function showResult(entry) {
 
     addToCartButton.addEventListener("click", () => {
         const qty = Math.max(1, Number(qtyInput.value) || 1);
-        const existing = cart.get(entry.id);
-        const discountPercent = existing?.discountPercent || 0;
-        const currentQty = existing?.quantity || 0;
-        cart.set(entry.id, { ...entry, quantity: currentQty + qty, discountPercent });
+        upsertCartEntry(entry, qty);
         saveCartState();
         renderCart();
         showResult(entry);
@@ -368,6 +560,10 @@ function renderCart() {
                     <input id="discount-${row.id}" class="discount-input item-discount-input" type="number" min="0" max="100" step="1" value="${row.discountPercent || 0}" data-id="${row.id}">
                 </div>
                 <button class="mini-button" type="button" data-cart-action="remove" data-id="${row.id}">${T.remove}</button>
+            </div>
+            <div class="cart-item-details">
+                <span>${T.quantity}: ${escapeHtml(row.quantity)}</span>
+                <span>${T.unit}: ${escapeHtml(row.unit || "-")}</span>
             </div>
             <div class="cart-item-meta">
                 <span>${T.subtotal}: ${escapeHtml(formatPrice(rowTotals.subtotal))}</span>
@@ -451,6 +647,7 @@ function buildPdfHtml(rows) {
             <td>${escapeHtml(row.name || "-")}</td>
             <td>${escapeHtml(row.code || "-")}</td>
             <td>${escapeHtml(row.quantity)}</td>
+            <td>${escapeHtml(row.unit || "-")}</td>
             <td>${escapeHtml(formatPrice(row.price))}</td>
             <td>${escapeHtml(row.discountPercent || 0)}%</td>
             <td>${escapeHtml(formatPrice(rowTotals.total))}</td>
@@ -505,6 +702,7 @@ function buildPdfHtml(rows) {
                     <th>الصنف</th>
                     <th>الكود</th>
                     <th>الكمية</th>
+                    <th>الوحدة</th>
                     <th>سعر الوحدة</th>
                     <th>الخصم</th>
                     <th>الإجمالي</th>
@@ -563,6 +761,7 @@ function updateActiveSuggestion(nextIndex) {
 
 async function loadData() {
     try {
+        restoreUiState();
         const response = await fetch(DATA_URL);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const rawItems = await response.json();
@@ -571,6 +770,7 @@ async function loadData() {
         statusElement.textContent = `${T.loaded} ${items.length} ${T.item}.`;
         renderEmptyState(T.startSearch);
         renderCart();
+        applyRestoredUiState();
     } catch (error) {
         statusElement.textContent = T.fetchError;
         renderEmptyState(T.runServer);
@@ -582,8 +782,10 @@ async function loadData() {
 searchInput.addEventListener("input", () => {
     const query = searchInput.value;
     renderSuggestions(findMatches(query), query);
+    saveUiState();
     if (!query.trim()) {
         selectedEntry = null;
+        saveUiState();
         renderEmptyState(T.startSearch);
     }
 });
@@ -612,6 +814,7 @@ clearButton.addEventListener("click", () => {
     lastMatches = [];
     activeIndex = -1;
     statusElement.textContent = `${T.loaded} ${items.length} ${T.item}.`;
+    saveUiState();
     renderEmptyState(T.startSearch);
     searchInput.focus();
 });
@@ -624,6 +827,11 @@ clearCartButton.addEventListener("click", () => {
 });
 
 downloadPdfButton.addEventListener("click", downloadPdf);
+uploadPriceSheetButton.addEventListener("click", () => priceSheetInput.click());
+priceSheetInput.addEventListener("change", () => {
+    const file = priceSheetInput.files?.[0];
+    importPriceSheet(file);
+});
 
 document.addEventListener("click", (event) => {
     if (!event.target.closest(".search-panel")) suggestionsElement.innerHTML = "";

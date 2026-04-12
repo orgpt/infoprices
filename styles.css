@@ -106,7 +106,13 @@ body {
 .cart-actions {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 10px;
+}
+
+.cart-actions .secondary-button {
+    white-space: nowrap;
 }
 
 .section-head h2,
@@ -436,6 +442,15 @@ body {
     margin-top: 14px;
 }
 
+.cart-item-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 0.92rem;
+}
+
 .item-discount-box {
     display: flex;
     align-items: center;
@@ -559,7 +574,8 @@ mark {
     .cart-item-top,
     .cart-item-bottom,
     .cart-total-block,
-    .item-discount-box {
+    .item-discount-box,
+    .cart-item-details {
         flex-direction: column;
         align-items: stretch;
     }
