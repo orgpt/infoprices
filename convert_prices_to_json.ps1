@@ -78,6 +78,7 @@ try {
             $item[$pair.Value] = if ($null -eq $value) { $null } else { $value.ToString().Trim() }
         }
 
+        $item['price net'] = [Math]::Round($price, 2)
         $item[$priceHeader] = Get-AdjustedPrice -Price $price
         $records.Add([pscustomobject]$item)
     }
