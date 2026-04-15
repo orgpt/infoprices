@@ -516,7 +516,8 @@ body {
 }
 
 .cart-subtotal-block,
-.cart-discount-block {
+.cart-discount-block,
+.cart-profit-block {
     margin-bottom: 12px;
 }
 
@@ -527,6 +528,7 @@ body {
 
 .cart-subtotal-value,
 .cart-discount-value,
+.cart-profit-value,
 .cart-total-value {
     color: var(--accent-deep);
     font-size: 1.4rem;

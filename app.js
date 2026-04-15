@@ -23,6 +23,7 @@ const T = {
     total: "\u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a",
     subtotal: "\u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a \u0642\u0628\u0644 \u0627\u0644\u062e\u0635\u0645",
     discountValue: "\u0642\u064a\u0645\u0629 \u0627\u0644\u062e\u0635\u0645",
+    profit: "\u0627\u0644\u0645\u0643\u0633\u0628",
     discountPercent: "\u062e\u0635\u0645 %",
     quantity: "\u0627\u0644\u0643\u0645\u064a\u0629",
     fetchError: "\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0645\u0644\u0641 \u0627\u0644\u0623\u0633\u0639\u0627\u0631.",
@@ -49,6 +50,7 @@ const resultsElement = document.getElementById("results");
 const cartListElement = document.getElementById("cartList");
 const cartSubtotalElement = document.getElementById("cartSubtotal");
 const cartDiscountValueElement = document.getElementById("cartDiscountValue");
+const cartProfitElement = document.getElementById("cartProfit");
 const cartTotalElement = document.getElementById("cartTotal");
 const cartSummaryElement = document.getElementById("cartSummary");
 
@@ -115,6 +117,7 @@ function buildIndex(rawItems) {
     return rawItems.map((item, index) => {
         const values = Object.values(item);
         const price = getField(item, ["السعر"]) || values[0] || 0;
+        const netPrice = getField(item, ["price net", "net price"]) || values[6] || 0;
         const packageValue = getField(item, ["العبوة"]) || values[1] || "";
         const cartonCount = getField(item, ["عدد العبوات بالكرتونة"]) || values[2] || "";
         const unit = getField(item, ["الوحدة"]) || values[3] || "";
@@ -126,6 +129,7 @@ function buildIndex(rawItems) {
             name: String(name ?? ""),
             code: String(code ?? ""),
             price: Number(price) || 0,
+            netPrice: Number(netPrice) || 0,
             packageValue: String(packageValue ?? ""),
             cartonCount: String(cartonCount ?? ""),
             unit: String(unit ?? ""),
@@ -169,10 +173,12 @@ function getCartQuantity(id) {
 
 function getRowTotals(row) {
     const subtotal = row.quantity * row.price;
+    const netSubtotal = row.quantity * (Number(row.netPrice) || 0);
     const discountPercent = Math.min(100, Math.max(0, Number(row.discountPercent) || 0));
     const discountValue = subtotal * (discountPercent / 100);
     const total = subtotal - discountValue;
-    return { subtotal, discountPercent, discountValue, total };
+    const profit = total - netSubtotal;
+    return { subtotal, netSubtotal, discountPercent, discountValue, total, profit };
 }
 
 function getCartTotals(rows = Array.from(cart.values())) {
@@ -181,8 +187,9 @@ function getCartTotals(rows = Array.from(cart.values())) {
         acc.subtotal += totals.subtotal;
         acc.discountValue += totals.discountValue;
         acc.total += totals.total;
+        acc.profit += totals.profit;
         return acc;
-    }, { subtotal: 0, discountValue: 0, total: 0 });
+    }, { subtotal: 0, discountValue: 0, total: 0, profit: 0 });
 }
 
 function saveCartState() {
@@ -527,6 +534,7 @@ function renderCart() {
         cartSummaryElement.textContent = T.noItemsYet;
         cartSubtotalElement.textContent = formatPrice(0);
         cartDiscountValueElement.textContent = formatPrice(0);
+        cartProfitElement.textContent = formatPrice(0);
         cartTotalElement.textContent = formatPrice(0);
         saveCartState();
         return;
@@ -536,6 +544,7 @@ function renderCart() {
     cartSummaryElement.textContent = `${rows.length} ${T.item}، ${totalQty} ${T.pieces}.`;
     cartSubtotalElement.textContent = formatPrice(totals.subtotal);
     cartDiscountValueElement.textContent = formatPrice(totals.discountValue);
+    cartProfitElement.textContent = formatPrice(totals.profit);
     cartTotalElement.textContent = formatPrice(totals.total);
 
     cartListElement.innerHTML = rows.map((row) => {
