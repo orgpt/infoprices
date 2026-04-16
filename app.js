@@ -37,17 +37,22 @@ const COMPANY_SITE = "https://elfagalla.com/";
 const STORAGE_KEY = "infoprice-cart-v1";
 const UI_STORAGE_KEY = "infoprice-ui-v1";
 const PDF_WORKER_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js";
+const QUOTES_API_URL = "./quotes_api.php";
 
 const searchInput = document.getElementById("searchInput");
 const clearButton = document.getElementById("clearButton");
 const clearCartButton = document.getElementById("clearCartButton");
 const downloadPdfButton = document.getElementById("downloadPdfButton");
+const saveQuoteButton = document.getElementById("saveQuoteButton");
+const quoteNameInput = document.getElementById("quoteNameInput");
 const uploadPriceSheetButton = document.getElementById("uploadPriceSheetButton");
 const priceSheetInput = document.getElementById("priceSheetInput");
 const statusElement = document.getElementById("status");
 const suggestionsElement = document.getElementById("suggestions");
 const resultsElement = document.getElementById("results");
 const cartListElement = document.getElementById("cartList");
+const savedQuotesListElement = document.getElementById("savedQuotesList");
+const savedQuotesSummaryElement = document.getElementById("savedQuotesSummary");
 const cartSubtotalElement = document.getElementById("cartSubtotal");
 const cartDiscountValueElement = document.getElementById("cartDiscountValue");
 const cartProfitElement = document.getElementById("cartProfit");
@@ -60,6 +65,8 @@ let activeIndex = -1;
 let selectedEntry = null;
 const cart = new Map();
 let restoredUiState = null;
+let savedQuotes = [];
+let currentQuoteId = null;
 
 function normalizeArabic(text) {
     return String(text ?? "")
@@ -236,7 +243,9 @@ function saveUiState() {
     try {
         const payload = {
             search: searchInput.value || "",
-            selectedCode: selectedEntry?.code || ""
+            selectedCode: selectedEntry?.code || "",
+            currentQuoteId,
+            quoteName: quoteNameInput?.value || ""
         };
         window.localStorage.setItem(UI_STORAGE_KEY, JSON.stringify(payload));
     } catch (error) {
@@ -260,7 +269,9 @@ function restoreUiState() {
 function applyRestoredUiState() {
     if (!restoredUiState) return;
 
-    const { search = "", selectedCode = "" } = restoredUiState;
+    const { search = "", selectedCode = "", currentQuoteId: restoredQuoteId = null, quoteName = "" } = restoredUiState;
+    currentQuoteId = restoredQuoteId || null;
+    if (quoteNameInput) quoteNameInput.value = quoteName;
     if (search) {
         searchInput.value = search;
         renderSuggestions(findMatches(search), search);
@@ -275,6 +286,160 @@ function applyRestoredUiState() {
     }
 
     if (!search) renderEmptyState(T.startSearch);
+}
+
+function setSaveButtonState(isSaving) {
+    if (!saveQuoteButton) return;
+    saveQuoteButton.disabled = isSaving;
+    saveQuoteButton.textContent = isSaving ? "جارٍ الحفظ..." : "حفظ عرض الأسعار";
+}
+
+function getSerializableCartRows() {
+    return Array.from(cart.values()).map((row) => ({
+        id: row.id,
+        name: row.name,
+        code: row.code,
+        price: row.price,
+        netPrice: row.netPrice,
+        packageValue: row.packageValue,
+        cartonCount: row.cartonCount,
+        unit: row.unit,
+        quantity: row.quantity,
+        discountPercent: row.discountPercent || 0
+    }));
+}
+
+async function loadSavedQuotes() {
+    try {
+        const response = await fetch(QUOTES_API_URL, { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        savedQuotes = Array.isArray(payload.quotes) ? payload.quotes : [];
+        renderSavedQuotes();
+    } catch (error) {
+        console.error("Failed to load saved quotes", error);
+        savedQuotes = [];
+        renderSavedQuotes("تعذر تحميل عروض الأسعار المحفوظة.");
+    }
+}
+
+function renderSavedQuotes(errorMessage = "") {
+    if (!savedQuotesListElement || !savedQuotesSummaryElement) return;
+
+    if (errorMessage) {
+        savedQuotesSummaryElement.textContent = errorMessage;
+        savedQuotesListElement.innerHTML = "";
+        return;
+    }
+
+    if (!savedQuotes.length) {
+        savedQuotesSummaryElement.textContent = "لا توجد عروض محفوظة بعد.";
+        savedQuotesListElement.innerHTML = `<div class="saved-quote-empty">احفظ أول عرض سعر ليظهر هنا.</div>`;
+        return;
+    }
+
+    savedQuotesSummaryElement.textContent = `يوجد ${savedQuotes.length} عرض سعر محفوظ.`;
+    savedQuotesListElement.innerHTML = savedQuotes.map((quote) => {
+        const updatedAt = quote.updatedAt
+            ? new Date(quote.updatedAt).toLocaleString("ar-EG")
+            : "-";
+
+        return `
+            <article class="saved-quote-card ${quote.id === currentQuoteId ? "is-active" : ""}">
+                <div class="saved-quote-top">
+                    <div>
+                        <h4>${escapeHtml(quote.name || "-")}</h4>
+                        <div class="saved-quote-meta">آخر تعديل: ${escapeHtml(updatedAt)}</div>
+                    </div>
+                    <div class="saved-quote-count">${escapeHtml(quote.itemCount || 0)} صنف</div>
+                </div>
+                <button class="mini-button restore-button" type="button" data-quote-id="${escapeHtml(quote.id)}">استعادة للتعديل</button>
+            </article>
+        `;
+    }).join("");
+
+    savedQuotesListElement.querySelectorAll("[data-quote-id]").forEach((button) => {
+        button.addEventListener("click", () => {
+            restoreSavedQuote(button.dataset.quoteId);
+        });
+    });
+}
+
+function restoreSavedQuote(quoteId) {
+    const quote = savedQuotes.find((entry) => entry.id === quoteId);
+    if (!quote) return;
+
+    cart.clear();
+    (quote.rows || []).forEach((row) => {
+        const entry = items.find((item) => (
+            item.id === Number(row.id) ||
+            normalizeDigits(item.code) === normalizeDigits(row.code)
+        ));
+
+        const source = entry || row;
+        cart.set(Number(source.id), {
+            ...source,
+            quantity: Math.max(1, Number(row.quantity) || 1),
+            discountPercent: Math.min(100, Math.max(0, Number(row.discountPercent) || 0))
+        });
+    });
+
+    currentQuoteId = quote.id;
+    quoteNameInput.value = quote.name || "";
+    saveCartState();
+    saveUiState();
+    renderCart();
+    renderSavedQuotes();
+    statusElement.textContent = `تمت استعادة عرض السعر "${quote.name}" للتعديل.`;
+    if (selectedEntry) showResult(selectedEntry);
+}
+
+async function saveCurrentQuote() {
+    const name = String(quoteNameInput?.value || "").trim();
+    const rows = getSerializableCartRows();
+
+    if (!name) {
+        statusElement.textContent = "اكتب اسم عرض السعر أولاً.";
+        quoteNameInput?.focus();
+        return;
+    }
+
+    if (!rows.length) {
+        statusElement.textContent = "أضف أصنافاً إلى عرض السعر قبل الحفظ.";
+        return;
+    }
+
+    setSaveButtonState(true);
+
+    try {
+        const response = await fetch(QUOTES_API_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                id: currentQuoteId,
+                name,
+                rows
+            })
+        });
+
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+            throw new Error(payload.message || `HTTP ${response.status}`);
+        }
+
+        currentQuoteId = payload.quote?.id || currentQuoteId;
+        quoteNameInput.value = payload.quote?.name || name;
+        saveUiState();
+        statusElement.textContent = `تم حفظ عرض السعر "${quoteNameInput.value}" في ملف JSON.`;
+        await loadSavedQuotes();
+    } catch (error) {
+        console.error("Failed to save quote", error);
+        statusElement.textContent = "تعذر حفظ عرض السعر في ملف JSON.";
+    } finally {
+        setSaveButtonState(false);
+    }
 }
 
 function upsertCartEntry(entry, quantityToAdd = 1) {
@@ -780,6 +945,7 @@ async function loadData() {
         renderEmptyState(T.startSearch);
         renderCart();
         applyRestoredUiState();
+        await loadSavedQuotes();
     } catch (error) {
         statusElement.textContent = T.fetchError;
         renderEmptyState(T.runServer);
@@ -836,6 +1002,8 @@ clearCartButton.addEventListener("click", () => {
 });
 
 downloadPdfButton.addEventListener("click", downloadPdf);
+saveQuoteButton.addEventListener("click", saveCurrentQuote);
+quoteNameInput.addEventListener("input", saveUiState);
 uploadPriceSheetButton.addEventListener("click", () => priceSheetInput.click());
 priceSheetInput.addEventListener("change", () => {
     const file = priceSheetInput.files?.[0];

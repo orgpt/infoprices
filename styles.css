@@ -115,6 +115,37 @@ body {
     white-space: nowrap;
 }
 
+.quote-name-input {
+    min-width: 220px;
+    min-height: 42px;
+    padding: 10px 14px;
+    border: 1px solid rgba(88, 60, 27, 0.15);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.9);
+    color: var(--text);
+    font-size: 0.95rem;
+}
+
+.quote-name-input:focus {
+    outline: none;
+    border-color: rgba(184, 92, 56, 0.55);
+    box-shadow: 0 0 0 4px rgba(184, 92, 56, 0.1);
+}
+
+.save-button {
+    background: rgba(143, 63, 31, 0.1);
+    color: var(--accent-deep);
+}
+
+.save-button:hover {
+    background: rgba(143, 63, 31, 0.16);
+}
+
+.save-button:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
 .section-head h2,
 .cart-head h2 {
     margin: 0;
@@ -394,6 +425,82 @@ body {
     margin-top: 18px;
 }
 
+.saved-quotes-panel {
+    margin-top: 18px;
+    padding: 16px;
+    border: 1px solid rgba(88, 60, 27, 0.1);
+    border-radius: 18px;
+    background: rgba(255, 252, 246, 0.72);
+}
+
+.saved-quotes-head h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.saved-quotes-head p {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.saved-quotes-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.saved-quote-card,
+.saved-quote-empty {
+    padding: 14px;
+    border: 1px solid rgba(88, 60, 27, 0.1);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.82);
+}
+
+.saved-quote-card.is-active {
+    border-color: rgba(184, 92, 56, 0.35);
+    box-shadow: 0 12px 24px rgba(67, 43, 22, 0.08);
+}
+
+.saved-quote-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.saved-quote-top h4 {
+    margin: 0;
+    font-size: 0.98rem;
+}
+
+.saved-quote-meta {
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 0.86rem;
+}
+
+.saved-quote-count {
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(184, 92, 56, 0.1);
+    color: var(--accent-deep);
+    font-size: 0.84rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.saved-quote-empty {
+    color: var(--muted);
+    text-align: center;
+}
+
+.restore-button {
+    width: 100%;
+}
+
 .cart-item,
 .cart-empty {
     padding: 16px;
@@ -588,6 +695,7 @@ mark {
     }
 
     .qty-input,
+    .quote-name-input,
     .add-button,
     .discount-input {
         width: 100%;
@@ -614,6 +722,11 @@ mark {
     .cart-list {
         max-height: 28vh;
         overflow: auto;
+    }
+
+    .saved-quote-top {
+        flex-direction: column;
+        align-items: stretch;
     }
 }
 
